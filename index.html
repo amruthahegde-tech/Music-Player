@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Player</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='hello.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Now Playing -->
+        <div class="top-center">
+            <div class="current-song">
+                <span class="now-playing-label">▶ NOW PLAYING</span>
+                <div id="current-song-info">
+                    {% if current_song %}
+                        <p class="song-title">{{ current_song[0] }}</p>
+                        <p class="song-artist">{{ current_song[1] }}</p>
+                        <div class="audio-controls">
+                            <form action="{{ url_for('previous_song') }}" method="GET">
+                                <button type="submit" class="nav-button">&#9664;&#9664;</button>
+                            </form>
+                            <audio id="audio-player" controls autoplay>
+                                <source src="{{ url_for('static_audio_files', filename=current_song[2]) }}" type="audio/mpeg">
+                            </audio>
+                            <form action="{{ url_for('next_song') }}" method="GET">
+                                <button type="submit" class="nav-button">&#9654;&#9654;</button>
+                            </form>
+                        </div>
+                    {% else %}
+                        <p class="song-title">No song playing</p>
+                        <div class="audio-controls">
+                            <form action="{{ url_for('previous_song') }}" method="GET">
+                                <button type="submit" class="nav-button">&#9664;&#9664;</button>
+                            </form>
+                            <audio id="audio-player" controls></audio>
+                            <form action="{{ url_for('next_song') }}" method="GET">
+                                <button type="submit" class="nav-button">&#9654;&#9654;</button>
+                            </form>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- Left: Add Song -->
+            <div class="left-side">
+                <h1>🎵 Music Player</h1>
+                <div class="add-song-card">
+                    <h2>Add to Playlist</h2>
+                    <form action="/" method="post">
+                        <label for="song_name">Song</label>
+                        <select id="song_name" name="song_name" required onchange="autofill(this)">
+                            <option value="" disabled selected>Select a song</option>
+                            {% for song in songs %}
+                                <option
+                                    value="{{ song['Song Name'] }}"
+                                    data-artist="{{ song['Artist'] }}"
+                                    data-path="{{ song['Path'] }}"
+                                    {% if song_details and song_details['Song Name'] == song['Song Name'] %}selected{% endif %}>
+                                    {{ song['Song Name'] }}
+                                </option>
+                            {% endfor %}
+                        </select>
+
+                        <label for="song_artist">Artist</label>
+                        <input type="text" id="song_artist" name="song_artist"
+                            value="{{ song_details.get('Artist', '') }}"
+                            placeholder="Artist name" required>
+
+                        <label for="song_url">Audio Path</label>
+                        <input type="text" id="song_url" name="song_url"
+                            value="{{ song_details.get('Path', '') }}"
+                            placeholder="e.g. audio1.mp3" required>
+
+                        <button type="submit" name="add_song">+ Add Song</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Right: Playlist -->
+            <div class="right-side">
+                <h2>Playlist</h2>
+                <ul class="playlist">
+                    {% for song in playlist %}
+                    {% set parts = song.split('|') %}
+                    {% if parts|length > 2 %}
+                    <li class="playlist-item">
+                        <div class="song-info">
+                            <span class="song-name">{{ parts[0] }}</span>
+                            <span class="song-artist-small">{{ parts[1] }}</span>
+                        </div>
+                        <div class="song-actions">
+                            <form action="/" method="POST" style="display:inline;">
+                                <input type="hidden" name="song_name" value="{{ parts[0] }}">
+                                <input type="hidden" name="song_artist" value="{{ parts[1] }}">
+                                <input type="hidden" name="song_url" value="{{ parts[2] }}">
+                                <button type="submit" name="play_song" class="play-btn" title="Play">&#9654;</button>
+                            </form>
+                            <form action="{{ url_for('delete_song') }}" method="POST" style="display:inline;">
+                                <input type="hidden" name="song_name" value="{{ parts[0] }}">
+                                <button type="submit" class="del-btn" title="Delete">&#10005;</button>
+                            </form>
+                        </div>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+<script>
+// Autofill artist and path when a song is selected from dropdown
+function autofill(select) {
+    const selected = select.options[select.selectedIndex];
+    document.getElementById('song_artist').value = selected.dataset.artist || '';
+    document.getElementById('song_url').value = selected.dataset.path || '';
+}
+
+const audio = document.getElementById("audio-player");
+
+if (audio) {
+    // Restore position + playing state after page reload
+    const savedTime = sessionStorage.getItem('audioTime');
+    const wasPlaying = sessionStorage.getItem('audioPlaying') === 'true';
+
+    if (savedTime) {
+        audio.addEventListener('loadedmetadata', () => {
+            audio.currentTime = parseFloat(savedTime);
+            if (wasPlaying) audio.play().catch(() => {});
+            sessionStorage.removeItem('audioTime');
+            sessionStorage.removeItem('audioPlaying');
+        }, { once: true });
+    }
+
+    // Save state before any form submit (add / delete)
+    document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', () => {
+            sessionStorage.setItem('audioTime', audio.currentTime);
+            sessionStorage.setItem('audioPlaying', !audio.paused);
+        });
+    });
+
+    // Auto-advance on song end
+    audio.addEventListener("ended", () => {
+        sessionStorage.removeItem('audioTime');
+        sessionStorage.removeItem('audioPlaying');
+        window.location.href = "/next_song";
+    });
+}
+</script>
+</body>
+</html>
